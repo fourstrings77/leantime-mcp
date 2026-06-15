@@ -128,12 +128,12 @@ async def create_ticket(headline: str, project_id: int, user_id: int = None, dat
 async def update_ticket(ticket_id: int, project_id: int, headline: str = None, description: str = None,
                        status: int = None, priority: str = None, assignedTo: int = None,
                        tags: str = None, milestone_id: int = None) -> str:
-    """Update an existing ticket.
+    """Update an existing ticket (partial update).
 
-    Note: this sends only the fields you provide. Because Leantime replaces the
-    ticket payload on update, unsent fields may be cleared — provide every field
-    you wish to keep. Tags and milestone are now settable here (the API supports
-    both on write).
+    Only the fields you provide are changed; all other fields are preserved.
+    The server has no PATCH endpoint, so this fetches the current ticket and
+    merges your changes over it before saving. Tags and milestone are settable
+    here (the API supports both on write).
     """
     client = get_client()
     # Build kwargs from non-None parameters

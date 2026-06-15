@@ -168,15 +168,40 @@ class LeantimeClient:
         params = {"values": values}
         return await self.call("leantime.rpc.Tickets.Tickets.addTicket", params)
     
-    async def update_ticket(self, ticket_id: int, project_id: int, **kwargs) -> dict:
+    async def update_ticket(self, ticket_id: int, project_id: int, merge: bool = True, **kwargs) -> dict:
         """Update an existing ticket.
-        
+
+        Leantime's updateTicket rebuilds the ticket from the supplied values and
+        blanks any field that is not sent (there is no PATCH endpoint). To avoid
+        silent data loss, this method fetches the current ticket and merges the
+        provided fields over it, so unspecified fields are preserved.
+
         Args:
             ticket_id: The ID of the ticket to update
             project_id: The project ID where the ticket belongs
-            **kwargs: Additional parameters to update
+            merge: When True (default), fetch the existing ticket and merge the
+                provided fields over it. Set False to send only the provided
+                fields (legacy destructive behavior).
+            **kwargs: Fields to update (headline, description, status, tags,
+                milestoneid, priority, assignedTo, ...)
         """
-        values = {"id": ticket_id, "projectId": project_id, **kwargs}
+        values: dict = {}
+
+        if merge:
+            current = await self.get_ticket(ticket_id)
+            if isinstance(current, dict):
+                # Carry forward the existing ticket as the baseline. updateTicket
+                # whitelists the keys it consumes, so extra/computed fields are
+                # harmless; the point is to preserve description/tags/milestone/etc.
+                values.update(current)
+
+        # Applied last so caller-provided fields win over the fetched baseline.
+        values.update(kwargs)
+
+        # Always pin identity fields regardless of what the baseline contained.
+        values["id"] = ticket_id
+        values["projectId"] = project_id
+
         params = {"values": values}
         return await self.call("leantime.rpc.Tickets.Tickets.updateTicket", params)
     
