@@ -24,17 +24,21 @@ class LeantimeAPIError(Exception):
 class LeantimeClient:
     """Client for interacting with Leantime's JSON-RPC 2.0 API."""
     
-    def __init__(self, base_url: str, api_key: str):
+    def __init__(self, base_url: str, api_key: str, user_email: Optional[str] = None):
         """Initialize the Leantime client.
-        
+
         Args:
             base_url: Base URL of the Leantime instance (e.g., https://leantime.example.com)
             api_key: API key for authentication
+            user_email: Email of the authenticated user. Used to resolve a default
+                user_id when one is not supplied (e.g. on create_ticket).
         """
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
+        self.user_email = user_email
         self.endpoint = f"{self.base_url}/api/jsonrpc"
         self._request_id = 0
+        self._current_user_id: Optional[int] = None
     
     def _get_next_id(self) -> int:
         """Get next JSON-RPC request ID."""
@@ -121,36 +125,46 @@ class LeantimeClient:
         params = {"searchCriteria": searchCriteria}
         return await self.call("leantime.rpc.Tickets.Tickets.getAll", params)
     
-    async def create_ticket(self, headline: str, project_id: int, user_id: int, date: Optional[str] = None, tags: Optional[str] = None, **kwargs) -> dict:
+    async def create_ticket(self, headline: str, project_id: int, user_id: Optional[int] = None, date: Optional[str] = None, tags: Optional[str] = None, milestone_id: Optional[int] = None, **kwargs) -> dict:
         """Create a new ticket.
-        
+
         Args:
             headline: Title/headline of the ticket
             project_id: Project ID where the ticket will be created
-            user_id: The ID of the user creating the ticket
+            user_id: The ID of the user creating the ticket. If omitted, defaults to
+                the authenticated user resolved from the configured email.
             date: The date when the ticket is created (YYYY-MM-DD format). Defaults to current date if not provided.
             tags: Comma-separated list of tags to add to the ticket
+            milestone_id: ID of the milestone to associate the ticket with
             **kwargs: Additional parameters
         """
         from datetime import datetime
-        
+
         # Use current date if none provided
         if date is None:
             date = datetime.now().strftime("%Y-%m-%d")
-        
+
+        # Default to the authenticated user when no user_id is supplied
+        if user_id is None:
+            user_id = await self.resolve_current_user_id()
+
         # The API expects a 'values' parameter containing the ticket data
         values = {
-            "headline": headline, 
+            "headline": headline,
             "projectId": project_id,
             "userId": user_id,
             "date": date,
             **kwargs
         }
-        
+
         # Add tags if provided
         if tags is not None:
             values["tags"] = tags
-        
+
+        # Add milestone if provided (the API field is 'milestoneid')
+        if milestone_id is not None:
+            values["milestoneid"] = milestone_id
+
         params = {"values": values}
         return await self.call("leantime.rpc.Tickets.Tickets.addTicket", params)
     
@@ -185,6 +199,31 @@ class LeantimeClient:
     async def get_user_by_email(self, email: str) -> dict:
         """Get user details by email address."""
         return await self.call("leantime.rpc.Users.Users.getUserByEmail", {"email": email})
+
+    async def resolve_current_user_id(self) -> int:
+        """Resolve the user_id of the authenticated user from the configured email.
+
+        The result is cached for the lifetime of the client. Raises ValueError if
+        no email is configured or the user cannot be found.
+        """
+        if self._current_user_id is not None:
+            return self._current_user_id
+
+        if not self.user_email:
+            raise ValueError(
+                "No user_id was provided and no user email is configured "
+                "(set LEANTIME_USER_EMAIL) to resolve a default user."
+            )
+
+        user = await self.get_user_by_email(self.user_email)
+        user_id = user.get("id") if isinstance(user, dict) else None
+        if not user_id:
+            raise ValueError(
+                f"Could not resolve a user_id for email '{self.user_email}'."
+            )
+
+        self._current_user_id = int(user_id)
+        return self._current_user_id
     
     async def add_comment(self, module: str, module_id: int, comment: str) -> dict:
         """Add a comment to a module (e.g., ticket, project)."""
