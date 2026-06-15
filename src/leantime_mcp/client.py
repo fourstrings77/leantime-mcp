@@ -18,7 +18,13 @@ class LeantimeAPIError(Exception):
         self.code = code
         self.message = message
         self.data = data
-        super().__init__(f"Leantime API Error {code}: {message}")
+        # Leantime carries the actionable reason in `data` (e.g. for -32602 the
+        # underlying "Required Parameter Missing: x" / "Could not cast parameter:
+        # y"). Surface it instead of just the generic top-level message.
+        detail = f"Leantime API Error {code}: {message}"
+        if data not in (None, ""):
+            detail += f" — {data}"
+        super().__init__(detail)
 
 
 class LeantimeClient:
