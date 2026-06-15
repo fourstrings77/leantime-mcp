@@ -377,13 +377,19 @@ class LeantimeClient:
         $values is an array keyed by 'text'. The previous flat
         {module, moduleId, comment} shape produced "Invalid params".
 
-        `entity` is sent explicitly as null: on this deployment it is a required
-        (no-default) parameter, and the service loads the host entity server-side
-        from module + entityId when it is null. Omitting it yields
-        "Required Parameter Missing: entity".
+        `entity` is sent explicitly as null and `father` as 0 for cross-version
+        portability: older Leantime (<=3.7.x) requires both `entity` and
+        `values['father']` to be present (no self-load, no father default) — see
+        the guard in Comments::addComment. Leantime >=3.9 supplies both defaults
+        and self-loads the entity, so the explicit values are harmless there.
+
+        NOTE: on Leantime 3.7.x the comment row is inserted but the call then
+        throws because the notification assigns the (session-less, hence null)
+        currentProject to a non-nullable `int $projectId`. Clean RPC comments
+        require Leantime >= 3.9.
         """
         params = {
-            "values": {"text": comment},
+            "values": {"text": comment, "father": 0},
             "module": module,
             "entityId": module_id,
             "entity": None,
