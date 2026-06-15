@@ -7,6 +7,7 @@
 import os
 import sys
 import json
+import difflib
 import logging
 from typing import Any
 from dotenv import load_dotenv
@@ -184,11 +185,41 @@ async def list_tickets(project_id: int = None, status: str = None, ticket_type: 
     return json.dumps(result, indent=2)
 
 
+async def _find_duplicate_headlines(client, project_id: int, headline: str, threshold: float) -> list:
+    """Return existing tickets whose headline is similar to `headline`.
+
+    Compares case-insensitively with difflib; archived tickets (status -1) are
+    ignored. Sorted by descending similarity.
+    """
+    existing = await client.list_tickets(project_id)
+    if not isinstance(existing, list):
+        return []
+    target = headline.strip().lower()
+    candidates = []
+    for t in existing:
+        if not isinstance(t, dict) or t.get("status") == -1:
+            continue
+        other = str(t.get("headline", "")).strip().lower()
+        if not other:
+            continue
+        ratio = difflib.SequenceMatcher(None, target, other).ratio()
+        if ratio >= threshold:
+            candidates.append({
+                "id": t.get("id"),
+                "headline": t.get("headline"),
+                "status": t.get("status"),
+                "similarity": round(ratio, 3),
+            })
+    candidates.sort(key=lambda c: c["similarity"], reverse=True)
+    return candidates
+
+
 @app.tool()
 async def create_ticket(headline: str, project_id: int, user_id: int = None, date: str = None,
                        description: str = None, status: int | str = None, priority: str = None,
                        assignedTo: int = None, tags: str = None, milestone_id: int = None,
-                       depends_on: int = None) -> str:
+                       depends_on: int = None, confirm_create: bool = False,
+                       dedupe_threshold: float = 0.85) -> str:
     """Create a new ticket.
 
     If user_id is omitted, the ticket is created as the authenticated user
@@ -197,8 +228,24 @@ async def create_ticket(headline: str, project_id: int, user_id: int = None, dat
     status accepts an integer id or a canonical name (new, in_progress, blocked,
     waiting, done, archived). depends_on sets the parent/dependency ticket
     (Leantime's dependingTicketId).
+
+    Dedupe guardrail: before creating, the new headline is fuzzy-matched against
+    the project's existing (non-archived) tickets. If any are at or above
+    dedupe_threshold (0..1, default 0.85), creation is REFUSED and the matches
+    are returned. Pass confirm_create=true to create anyway.
     """
     client = get_client()
+
+    if not confirm_create:
+        candidates = await _find_duplicate_headlines(client, project_id, headline, dedupe_threshold)
+        if candidates:
+            return json.dumps({
+                "created": False,
+                "reason": "possible duplicate headline(s) found",
+                "candidates": candidates[:5],
+                "hint": "pass confirm_create=true to create anyway, or update an existing ticket",
+            }, indent=2)
+
     kwargs = {}
     if depends_on is not None:
         kwargs['dependingTicketId'] = depends_on
@@ -209,7 +256,7 @@ async def create_ticket(headline: str, project_id: int, user_id: int = None, dat
         priority=priority, assignedTo=assignedTo, tags=tags,
         milestone_id=milestone_id, **kwargs
     )
-    return json.dumps(result, indent=2)
+    return json.dumps({"created": True, "result": result}, indent=2)
 
 
 @app.tool()
@@ -258,6 +305,67 @@ async def update_ticket(ticket_id: int, project_id: int, headline: str = None, d
         response["comment_added"] = await client.add_comment("ticket", ticket_id, comment)
 
     return json.dumps(response, indent=2)
+
+
+@app.tool()
+async def bulk_update_status(ticket_ids: list[int], status: int | str, project_id: int) -> str:
+    """Move several tickets to the same status in one call.
+
+    Loops over update_ticket (which fetch-merges, so each ticket's other fields
+    are preserved) and reports per-ticket success/failure instead of aborting on
+    the first error. status accepts an integer id or a canonical name.
+    """
+    client = get_client()
+    resolved = _resolve_status(status)
+    results = []
+    for tid in ticket_ids:
+        try:
+            await client.update_ticket(tid, project_id, status=resolved)
+            results.append({"ticket_id": tid, "success": True})
+        except Exception as exc:  # per-ticket resilience: keep going on failure
+            results.append({"ticket_id": tid, "success": False, "error": str(exc)})
+    succeeded = sum(1 for r in results if r["success"])
+    return json.dumps({
+        "summary": {"total": len(results), "succeeded": succeeded, "failed": len(results) - succeeded},
+        "results": results,
+    }, indent=2)
+
+
+@app.tool()
+async def get_ticket_tree(ticket_id: int, max_depth: int = 5) -> str:
+    """Return a ticket with its subtask hierarchy nested inline.
+
+    Uses getAllSubtasks recursively and projects each node to the compact field
+    set (same as list_tickets) so the result stays under the token limit. Each
+    node carries a `children` list when it has subtasks. Cycles and depth beyond
+    max_depth are guarded.
+    """
+    client = get_client()
+    visited: set = set()
+
+    async def build(tid: int, ticket_obj: dict, depth: int) -> dict:
+        node = {k: ticket_obj[k] for k in COMPACT_TICKET_FIELDS if k in ticket_obj}
+        visited.add(tid)
+        if depth < max_depth:
+            subs = await client.get_all_subtasks(tid)
+            children = []
+            if isinstance(subs, list):
+                for ch in subs:
+                    if not isinstance(ch, dict):
+                        continue
+                    cid = ch.get("id")
+                    if cid is None or cid in visited:
+                        continue
+                    children.append(await build(cid, ch, depth + 1))
+            if children:
+                node["children"] = children
+        return node
+
+    root = await client.get_ticket(ticket_id)
+    if not isinstance(root, dict):
+        return json.dumps({"error": f"ticket {ticket_id} not found"}, indent=2)
+    tree = await build(ticket_id, root, 0)
+    return json.dumps(tree, indent=2)
 
 
 @app.tool()
