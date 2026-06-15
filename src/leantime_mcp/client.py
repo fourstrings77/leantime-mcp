@@ -189,14 +189,20 @@ class LeantimeClient:
     async def add_comment(self, module: str, module_id: int, comment: str) -> dict:
         """Add a comment to a module (e.g., ticket, project).
 
-        The upstream signature is addComment($values, $module, $entityId, $entity),
-        where $values is an array keyed by 'text'. The previous flat
+        The signature is addComment($values, $module, $entityId, $entity), where
+        $values is an array keyed by 'text'. The previous flat
         {module, moduleId, comment} shape produced "Invalid params".
+
+        `entity` is sent explicitly as null: on this deployment it is a required
+        (no-default) parameter, and the service loads the host entity server-side
+        from module + entityId when it is null. Omitting it yields
+        "Required Parameter Missing: entity".
         """
         params = {
             "values": {"text": comment},
             "module": module,
             "entityId": module_id,
+            "entity": None,
         }
         return await self.call("leantime.rpc.Comments.addComment", params)
 
