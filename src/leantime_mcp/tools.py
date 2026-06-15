@@ -69,13 +69,45 @@ TOOLS = [
     ),
     Tool(
         name="list_tickets",
-        description="List tickets, optionally filtered by project",
+        description="List tickets with optional filters. Returns a compact index by default to stay under the token limit; use get_ticket for a single full ticket.",
         inputSchema={
             "type": "object",
             "properties": {
                 "project_id": {
                     "type": "integer",
                     "description": "Optional project ID to filter tickets"
+                },
+                "status": {
+                    "type": "string",
+                    "description": "Comma-separated status IDs, or one of 'all', 'not_done', 'done'"
+                },
+                "ticket_type": {
+                    "type": "string",
+                    "description": "Comma-separated ticket types"
+                },
+                "priority": {
+                    "type": "string",
+                    "description": "Comma-separated priorities"
+                },
+                "milestone": {
+                    "type": "string",
+                    "description": "Comma-separated milestone IDs"
+                },
+                "term": {
+                    "type": "string",
+                    "description": "Free-text search term"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of tickets to return"
+                },
+                "compact": {
+                    "type": "boolean",
+                    "description": "Return a lightweight index (default true). Set false for full ticket objects."
+                },
+                "fields": {
+                    "type": "string",
+                    "description": "Comma-separated list of fields to return (overrides compact)"
                 }
             }
         }

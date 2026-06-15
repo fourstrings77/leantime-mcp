@@ -98,11 +98,52 @@ async def get_ticket(ticket_id: int) -> str:
     return json.dumps(result, indent=2)
 
 
+# Fields returned in compact list mode — a lightweight board index that stays
+# well under the tool-result token cap (full ticket objects include rich-HTML
+# descriptions that overflow it).
+COMPACT_TICKET_FIELDS = [
+    "id", "headline", "type", "status", "priority",
+    "tags", "milestoneid", "editorId", "dateToFinish", "dependingTicketId",
+]
+
+
 @app.tool()
-async def list_tickets(project_id: int = None) -> str:
-    """List tickets, optionally filtered by project ID."""
+async def list_tickets(project_id: int = None, status: str = None, ticket_type: str = None,
+                       priority: str = None, milestone: str = None, term: str = None,
+                       limit: int = None, compact: bool = True, fields: str = None) -> str:
+    """List tickets with optional filters.
+
+    Returns a compact index by default (id, headline, type, status, priority,
+    tags, milestoneid, editorId, dateToFinish, dependingTicketId) to stay under
+    the tool-result token limit — full ticket objects include rich-HTML
+    descriptions that overflow it. Use get_ticket for a single full ticket.
+
+    Filters (all optional): status accepts comma-separated status IDs or one of
+    'all'/'not_done'/'done'; ticket_type, priority, milestone accept
+    comma-separated values; term is free-text search; limit caps the count.
+
+    Set compact=False for full ticket objects, or pass fields as a
+    comma-separated list to choose exactly which fields to return.
+    """
     client = get_client()
-    result = await client.list_tickets(project_id)
+    result = await client.list_tickets(
+        project_id=project_id, status=status, ticket_type=ticket_type,
+        priority=priority, milestone=milestone, term=term, limit=limit
+    )
+
+    if fields:
+        selected = [f.strip() for f in fields.split(",") if f.strip()]
+    elif compact:
+        selected = COMPACT_TICKET_FIELDS
+    else:
+        selected = None
+
+    if selected is not None and isinstance(result, list):
+        result = [
+            {k: t[k] for k in selected if k in t}
+            for t in result if isinstance(t, dict)
+        ]
+
     return json.dumps(result, indent=2)
 
 

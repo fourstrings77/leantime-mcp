@@ -113,12 +113,45 @@ class LeantimeClient:
         """Get ticket details by ID."""
         return await self.call("leantime.rpc.Tickets.Tickets.getTicket", {"id": ticket_id})
     
-    async def list_tickets(self, project_id: Optional[int] = None) -> list:
-        """List tickets, optionally filtered by project."""
-        searchCriteria = {}
+    async def list_tickets(
+        self,
+        project_id: Optional[int] = None,
+        status: Optional[str] = None,
+        ticket_type: Optional[str] = None,
+        priority: Optional[str] = None,
+        milestone: Optional[str] = None,
+        term: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> list:
+        """List tickets with optional server-side filters.
+
+        Args:
+            project_id: Restrict to a project (searchCriteria.currentProject).
+            status: Comma-separated status IDs, or one of 'all', 'not_done',
+                'done' (searchCriteria.status).
+            ticket_type: Comma-separated ticket types (searchCriteria.type).
+            priority: Comma-separated priorities (searchCriteria.priority).
+            milestone: Comma-separated milestone IDs (searchCriteria.milestone).
+            term: Free-text search term (searchCriteria.term).
+            limit: Maximum number of tickets to return (passed to getAll).
+        """
+        searchCriteria: dict = {}
         if project_id:
             searchCriteria["currentProject"] = project_id
-        params = {"searchCriteria": searchCriteria}
+        if status is not None:
+            searchCriteria["status"] = status
+        if ticket_type is not None:
+            searchCriteria["type"] = ticket_type
+        if priority is not None:
+            searchCriteria["priority"] = priority
+        if milestone is not None:
+            searchCriteria["milestone"] = milestone
+        if term is not None:
+            searchCriteria["term"] = term
+
+        params: dict = {"searchCriteria": searchCriteria}
+        if limit is not None:
+            params["limit"] = limit
         return await self.call("leantime.rpc.Tickets.Tickets.getAll", params)
     
     async def create_ticket(self, headline: str, project_id: int, user_id: int, date: Optional[str] = None, tags: Optional[str] = None, **kwargs) -> dict:
