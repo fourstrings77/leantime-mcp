@@ -161,6 +161,14 @@ TOOLS = [
                 "depends_on": {
                     "type": "integer",
                     "description": "Parent/dependency ticket id (Leantime dependingTicketId)"
+                },
+                "confirm_create": {
+                    "type": "boolean",
+                    "description": "Override the duplicate-headline guardrail and create anyway (default false)"
+                },
+                "dedupe_threshold": {
+                    "type": "number",
+                    "description": "Similarity threshold 0..1 for the duplicate guardrail (default 0.85)"
                 }
             },
             "required": ["headline", "project_id"]
@@ -391,6 +399,47 @@ TOOLS = [
                 }
             },
             "required": ["parent_ticket", "headline"]
+        }
+    ),
+    Tool(
+        name="bulk_update_status",
+        description="Move several tickets to the same status in one call; reports per-ticket success/failure.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "ticket_ids": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "IDs of the tickets to transition"
+                },
+                "status": {
+                    "type": ["integer", "string"],
+                    "description": "Target status as an integer id or canonical name (new, in_progress, blocked, waiting, done, archived)"
+                },
+                "project_id": {
+                    "type": "integer",
+                    "description": "Project ID the tickets belong to"
+                }
+            },
+            "required": ["ticket_ids", "status", "project_id"]
+        }
+    ),
+    Tool(
+        name="get_ticket_tree",
+        description="Return a ticket with its subtask hierarchy nested inline (compact fields, stays under the token limit).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "ticket_id": {
+                    "type": "integer",
+                    "description": "The root ticket ID"
+                },
+                "max_depth": {
+                    "type": "integer",
+                    "description": "Maximum recursion depth (default 5)"
+                }
+            },
+            "required": ["ticket_id"]
         }
     ),
 ]
