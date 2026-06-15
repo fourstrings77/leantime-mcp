@@ -96,7 +96,7 @@ TOOLS = [
                 },
                 "user_id": {
                     "type": "integer",
-                    "description": "The ID of the user creating the ticket"
+                    "description": "The ID of the user creating the ticket. If omitted, defaults to the authenticated user (resolved from LEANTIME_USER_EMAIL)."
                 },
                 "date": {
                     "type": "string",
@@ -121,9 +121,13 @@ TOOLS = [
                 "tags": {
                     "type": "string",
                     "description": "Comma-separated list of tags to add to the ticket"
+                },
+                "milestone_id": {
+                    "type": "integer",
+                    "description": "ID of the milestone to associate the ticket with"
                 }
             },
-            "required": ["headline", "project_id", "user_id"]
+            "required": ["headline", "project_id"]
         }
     ),
     Tool(
@@ -159,6 +163,14 @@ TOOLS = [
                 "assignedTo": {
                     "type": "integer",
                     "description": "New assignee user ID"
+                },
+                "tags": {
+                    "type": "string",
+                    "description": "Comma-separated list of tags to set on the ticket"
+                },
+                "milestone_id": {
+                    "type": "integer",
+                    "description": "ID of the milestone to associate the ticket with"
                 }
             },
             "required": ["ticket_id", "project_id"]

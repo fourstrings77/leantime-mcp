@@ -57,7 +57,7 @@ def get_client() -> LeantimeClient:
                 "Please set it in your .env file or environment."
             )
         
-        leantime_client = LeantimeClient(leantime_url, leantime_api_key)
+        leantime_client = LeantimeClient(leantime_url, leantime_api_key, leantime_user_email)
         logger.info(f"Initialized Leantime client for {leantime_url}")
     
     return leantime_client
@@ -107,23 +107,34 @@ async def list_tickets(project_id: int = None) -> str:
 
 
 @app.tool()
-async def create_ticket(headline: str, project_id: int, user_id: int, date: str = None, 
+async def create_ticket(headline: str, project_id: int, user_id: int = None, date: str = None,
                        description: str = None, status: str = None, priority: str = None,
-                       assignedTo: str = None, tags: str = None) -> str:
-    """Create a new ticket."""
+                       assignedTo: str = None, tags: str = None, milestone_id: int = None) -> str:
+    """Create a new ticket.
+
+    If user_id is omitted, the ticket is created as the authenticated user
+    (resolved from the configured LEANTIME_USER_EMAIL).
+    """
     client = get_client()
     result = await client.create_ticket(
         headline=headline, project_id=project_id, user_id=user_id, date=date,
         description=description, status=status, priority=priority,
-        assignedTo=assignedTo, tags=tags
+        assignedTo=assignedTo, tags=tags, milestone_id=milestone_id
     )
     return json.dumps(result, indent=2)
 
 
 @app.tool()
-async def update_ticket(ticket_id: int, project_id: int, headline: str = None, description: str = None, 
-                       status: int = None, priority: str = None, assignedTo: int = None) -> str:
-    """Update an existing ticket."""
+async def update_ticket(ticket_id: int, project_id: int, headline: str = None, description: str = None,
+                       status: int = None, priority: str = None, assignedTo: int = None,
+                       tags: str = None, milestone_id: int = None) -> str:
+    """Update an existing ticket.
+
+    Note: this sends only the fields you provide. Because Leantime replaces the
+    ticket payload on update, unsent fields may be cleared — provide every field
+    you wish to keep. Tags and milestone are now settable here (the API supports
+    both on write).
+    """
     client = get_client()
     # Build kwargs from non-None parameters
     kwargs = {}
@@ -137,7 +148,12 @@ async def update_ticket(ticket_id: int, project_id: int, headline: str = None, d
         kwargs['priority'] = priority
     if assignedTo is not None:
         kwargs['assignedTo'] = assignedTo
-    
+    if tags is not None:
+        kwargs['tags'] = tags
+    if milestone_id is not None:
+        # The API field is 'milestoneid'
+        kwargs['milestoneid'] = milestone_id
+
     result = await client.update_ticket(ticket_id, project_id, **kwargs)
     return json.dumps(result, indent=2)
 
