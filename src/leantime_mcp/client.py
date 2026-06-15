@@ -187,19 +187,27 @@ class LeantimeClient:
         return await self.call("leantime.rpc.Users.Users.getUserByEmail", {"email": email})
     
     async def add_comment(self, module: str, module_id: int, comment: str) -> dict:
-        """Add a comment to a module (e.g., ticket, project)."""
+        """Add a comment to a module (e.g., ticket, project).
+
+        The upstream signature is addComment($values, $module, $entityId, $entity),
+        where $values is an array keyed by 'text'. The previous flat
+        {module, moduleId, comment} shape produced "Invalid params".
+        """
         params = {
+            "values": {"text": comment},
             "module": module,
-            "moduleId": module_id,
-            "comment": comment
+            "entityId": module_id,
         }
         return await self.call("leantime.rpc.Comments.addComment", params)
-    
+
     async def get_comments(self, module: str, module_id: int) -> list:
-        """Get comments for a module."""
+        """Get comments for a module.
+
+        Upstream signature: getComments($module, $entityId, $commentOrder=0, $parent=0).
+        """
         params = {
             "module": module,
-            "moduleId": module_id
+            "entityId": module_id,
         }
         return await self.call("leantime.rpc.Comments.getComments", params)
     
