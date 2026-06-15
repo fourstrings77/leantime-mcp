@@ -139,8 +139,8 @@ TOOLS = [
                     "description": "Detailed description of the ticket"
                 },
                 "status": {
-                    "type": "integer",
-                    "description": "Status ID of the ticket"
+                    "type": ["integer", "string"],
+                    "description": "Status as an integer id or a canonical name: new, in_progress, blocked, waiting, done, archived"
                 },
                 "priority": {
                     "type": "string",
@@ -157,6 +157,10 @@ TOOLS = [
                 "milestone_id": {
                     "type": "integer",
                     "description": "ID of the milestone to associate the ticket with"
+                },
+                "depends_on": {
+                    "type": "integer",
+                    "description": "Parent/dependency ticket id (Leantime dependingTicketId)"
                 }
             },
             "required": ["headline", "project_id"]
@@ -185,8 +189,8 @@ TOOLS = [
                     "description": "New description"
                 },
                 "status": {
-                    "type": "integer",
-                    "description": "New status ID"
+                    "type": ["integer", "string"],
+                    "description": "New status as an integer id or canonical name: new, in_progress, blocked, waiting, done, archived"
                 },
                 "priority": {
                     "type": "string",
@@ -203,6 +207,14 @@ TOOLS = [
                 "milestone_id": {
                     "type": "integer",
                     "description": "ID of the milestone to associate the ticket with"
+                },
+                "depends_on": {
+                    "type": "integer",
+                    "description": "Parent/dependency ticket id (Leantime dependingTicketId)"
+                },
+                "comment": {
+                    "type": "string",
+                    "description": "Optional comment to add to the ticket after the update (audit trail for the transition)"
                 }
             },
             "required": ["ticket_id", "project_id"]
