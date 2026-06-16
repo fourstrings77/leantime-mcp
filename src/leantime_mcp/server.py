@@ -457,6 +457,20 @@ async def get_ticket_links(ticket_id: int) -> str:
 
 
 @app.tool()
+async def get_ticket_files(ticket_id: int) -> str:
+    """List the files/attachments on a ticket.
+
+    Read-only. NOTE: uploading a file to a ticket is NOT possible via this MCP —
+    Leantime's Files.upload() requires a web (multipart/$_FILES) request with a
+    server-side temp file, which JSON-RPC cannot supply. Attach files in the
+    Leantime UI; this tool lets you see what's already attached.
+    """
+    client = get_client()
+    result = await client.get_files_by_module("ticket", ticket_id)
+    return json.dumps(result, indent=2)
+
+
+@app.tool()
 async def get_status_labels() -> str:
     """Get available status labels."""
     client = get_client()

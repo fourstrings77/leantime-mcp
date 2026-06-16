@@ -487,6 +487,20 @@ TOOLS = [
             "required": ["ticket_id"]
         }
     ),
+    Tool(
+        name="get_ticket_files",
+        description="List the files/attachments on a ticket (read-only; uploading is not possible via JSON-RPC).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "ticket_id": {
+                    "type": "integer",
+                    "description": "The ticket whose attachments to list"
+                }
+            },
+            "required": ["ticket_id"]
+        }
+    ),
 ]
 
 

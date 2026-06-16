@@ -244,7 +244,17 @@ class LeantimeClient:
         if limit is not None:
             params["limit"] = limit
         return await self.call("leantime.rpc.Tickets.Tickets.getAll", params)
-    
+
+    async def get_files_by_module(self, module: str, module_id: int) -> list:
+        """List files/attachments for a module entity (e.g. a ticket).
+
+        Read-only. Uploading is not available over JSON-RPC: the Files service's
+        upload() needs a web ($_FILES) multipart request with a server-side temp
+        file, which RPC cannot supply.
+        """
+        params = {"module": module, "entityId": module_id}
+        return await self.call("leantime.rpc.Files.getFilesByModule", params)
+
     async def create_ticket(self, headline: str, project_id: int, user_id: Optional[int] = None, date: Optional[str] = None, tags: Optional[str] = None, milestone_id: Optional[int] = None, **kwargs) -> dict:
         """Create a new ticket.
 
