@@ -442,6 +442,51 @@ TOOLS = [
             "required": ["ticket_id"]
         }
     ),
+    Tool(
+        name="link_ticket",
+        description="Attach an external reference (MR/commit/pipeline/branch/issue/doc) to a ticket as a structured, clickable, parseable comment.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "ticket_id": {
+                    "type": "integer",
+                    "description": "The ticket to attach the link to"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": ["merge_request", "commit", "pipeline", "branch", "issue", "doc"],
+                    "description": "The kind of reference"
+                },
+                "url": {
+                    "type": "string",
+                    "description": "The link URL (rendered clickable in Leantime)"
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Short human tag, e.g. '!80', 'abc1234', '#3' (defaults to the URL)"
+                },
+                "state": {
+                    "type": "string",
+                    "description": "Optional status where it applies, e.g. pipeline green/red, mr merged/open"
+                }
+            },
+            "required": ["ticket_id", "type", "url"]
+        }
+    ),
+    Tool(
+        name="get_ticket_links",
+        description="Return the structured external links previously attached to a ticket via link_ticket.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "ticket_id": {
+                    "type": "integer",
+                    "description": "The ticket whose links to return"
+                }
+            },
+            "required": ["ticket_id"]
+        }
+    ),
 ]
 
 

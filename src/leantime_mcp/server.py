@@ -6,6 +6,7 @@
 
 import os
 import sys
+import re
 import json
 import difflib
 import logging
@@ -366,6 +367,93 @@ async def get_ticket_tree(ticket_id: int, max_depth: int = 5) -> str:
         return json.dumps({"error": f"ticket {ticket_id} not found"}, indent=2)
     tree = await build(ticket_id, root, 0)
     return json.dumps(tree, indent=2)
+
+
+# --- External reference links (stored as structured comments) -------------------
+# Leantime tickets have no url/reference field, so links live in comments. We write
+# a single-line, marker-prefixed, key=value record so it is both clickable in the
+# UI (Leantime auto-links the URL) and round-trippable back into structured data.
+LINK_MARKER = "🔗 LINK"
+LINK_TYPES = ("merge_request", "commit", "pipeline", "branch", "issue", "doc")
+
+
+def _format_link_comment(link_type: str, url: str, label: str, state: str = None) -> str:
+    parts = [LINK_MARKER, f"type={link_type}", f"label={label}"]
+    if state:
+        parts.append(f"state={state}")
+    parts.append(f"url={url}")  # url last so its value runs to end-of-line
+    return " | ".join(parts)
+
+
+def _parse_link_comment(text: str) -> dict | None:
+    """Parse a link record out of a comment's text, or None if it isn't one."""
+    if not text or LINK_MARKER not in text:
+        return None
+    # Leantime may wrap the URL in an <a> tag on storage; strip tags first.
+    plain = re.sub(r"<[^>]+>", "", text)
+
+    def field(name: str) -> str | None:
+        m = re.search(rf"{name}=([^|]*)", plain)
+        return m.group(1).strip() if m else None
+
+    url = field("url")
+    if url:
+        m = re.search(r"https?://\S+", url)
+        if m:
+            url = m.group(0)
+    return {
+        "type": field("type"),
+        "label": field("label"),
+        "state": field("state") or None,
+        "url": url,
+    }
+
+
+@app.tool()
+async def link_ticket(ticket_id: int, type: str, url: str, label: str = None, state: str = None) -> str:
+    """Attach an external reference (MR / commit / pipeline / ...) to a ticket.
+
+    Tickets have no native link field, so the reference is written as a single
+    structured comment that Leantime renders with a clickable URL and a
+    timestamp, and that get_ticket_links can parse back into structured data.
+
+    type must be one of: merge_request, commit, pipeline, branch, issue, doc.
+    label is a short human tag (e.g. "!80", "abc1234", "#3"); defaults to the URL.
+    state carries status where it applies (e.g. pipeline: green/red, mr: merged/open).
+    """
+    if type not in LINK_TYPES:
+        raise ValueError(f"type must be one of: {', '.join(LINK_TYPES)}")
+    client = get_client()
+    label = label or url
+    comment = _format_link_comment(type, url, label, state)
+    added = await client.add_comment("ticket", ticket_id, comment)
+    return json.dumps({
+        "linked": added,
+        "ticket_id": ticket_id,
+        "link": {"type": type, "label": label, "state": state, "url": url},
+    }, indent=2)
+
+
+@app.tool()
+async def get_ticket_links(ticket_id: int) -> str:
+    """Return the structured external links previously attached via link_ticket.
+
+    Parses the ticket's comments back into records {type, label, state, url}, so
+    "what MR shipped this ticket?" is a query rather than reading prose.
+    """
+    client = get_client()
+    comments = await client.get_comments("ticket", ticket_id)
+    links = []
+    if isinstance(comments, list):
+        for c in comments:
+            if not isinstance(c, dict):
+                continue
+            parsed = _parse_link_comment(c.get("text", ""))
+            if parsed:
+                parsed["comment_id"] = c.get("id")
+                parsed["date"] = c.get("date")
+                links.append(parsed)
+    return json.dumps({"ticket_id": ticket_id, "links": links}, indent=2)
 
 
 @app.tool()
